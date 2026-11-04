@@ -47,3 +47,21 @@ mkdir -p /run/openrc && touch /run/openrc/softlevel     # OpenRC in "soft" mode 
 * The fallback direct call in `/init` guarantees WiFi even if OpenRC misbehaves.
 * `CONFIG_MODULE_UNLOAD=n` ⇒ exactly one module load per boot.
 * Clock: set the time before using `apk` (TLS). Optionally add an NTP client later.
+
+## Update (same day, after OpenRC rollback)
+
+OpenRC-based startup was rolled back (`/etc/init.d/sky-wifi` moved to
+`/root/openrc-backup/`, removed from the `default` runlevel, `/etc/inittab` restored
+from `/etc/inittab.bak-20261104`, `/init` has no OpenRC lines again).
+
+**Important root cause found:** `wpss` (remoteproc1) is probed by the kernel at ~1.9 s,
+**before the rootfs is mounted**, so
+`Direct firmware load for qcom/sm4450/xiaomi-sky/wpss.mbn failed with error -2` and WPSS
+stays `offline`. Without WPSS, `icnss2`'s QMI handshake never completes, `WLAN FW is ready`
+never appears and `wlan0` is not created.
+
+`sky-wifi-load.sh` now **starts** the WPSS remoteproc (`echo start > .../state`) inside its
+wait loop instead of only polling for it. Starting it manually at 156 s brought the whole
+stack up on the spot (icnss2 recovered by itself: `FW_READY(2), ret: 0`,
+`hdd_wlan_startup=0`, `hdd_psoc_create_vdevs=0`), then wpa_supplicant + DHCP + ping worked
+again (`192.168.1.186`, 0% loss).

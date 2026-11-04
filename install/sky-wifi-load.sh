@@ -8,6 +8,15 @@ WPA_CONF=/etc/wpa_supplicant/wpa_supplicant.conf
 
 log() { echo "sky-wifi-load: $*" >> "$LOG"; }
 
+# single instance only (OpenRC + any manual call must not race)
+LOCK=/run/sky-wifi.lock
+mkdir -p /run
+if ! mkdir "$LOCK" 2>/dev/null; then
+	log "another instance is running ($LOCK) -> exit"
+	exit 0
+fi
+trap 'rmdir "$LOCK" 2>/dev/null' EXIT INT TERM
+
 [ -f "$LOG" ] && [ "$(wc -l < "$LOG" 2>/dev/null || echo 0)" -gt 300 ] && : > "$LOG"
 log "=== $(date '+%F %T') start ==="
 
@@ -18,19 +27,35 @@ else
 	         $FW/adrastea/regdb.bin $FW/wlan/qca_cld/WCNSS_qcom_cfg.ini; do
 		[ -s "$f" ] || { log "missing/empty: $f -> abort"; exit 1; }
 	done
+	# wait for the WPSS remote processor: icnss2's QMI handshake needs it up
+	i=0
+	while [ $i -lt 180 ]; do
+		for r in /sys/class/remoteproc/remoteproc*; do
+			[ -r "$r/name" ] || continue
+			[ "$(cat $r/name 2>/dev/null)" = wpss ] || continue
+			[ "$(cat $r/state 2>/dev/null)" = running ] && i=999 && break
+			# starts at ~1.9 s in the kernel, before /lib/firmware is mounted -> ENOENT.
+			# Retry here; it is a no-op when the firmware was already loaded.
+			echo start > $r/state 2>/dev/null
+		done
+		[ "$i" = 999 ] && break
+		i=$((i+1)); sleep 0.5
+	done
+	if [ "$i" = 999 ]; then log "wpss remoteproc running (started on demand)"; else log "WARN: wpss not running after 90s"; fi
+
 	insmod $M/wlan_firmware_service.ko || { log "insmod wlan_firmware_service FAILED"; exit 1; }
 	log "wlan_firmware_service loaded"
 	insmod $M/icnss2.ko || { log "insmod icnss2 FAILED"; exit 1; }
 	log "icnss2 loaded"
 	i=0
-	while [ $i -lt 40 ]; do
+	while [ $i -lt 60 ]; do
 		dmesg | grep -q "WLAN FW is ready" && break
 		i=$((i+1)); sleep 0.5
 	done
 	if dmesg | grep -q "WLAN FW is ready"; then
 		log "WLAN FW is ready: $(dmesg | grep -m1 'WLAN FW is ready' | sed 's/.*: //')"
 	else
-		log "WARN: FW ready not seen in 20s"
+		log "WARN: FW ready not seen in 30s"
 	fi
 	insmod $M/wlan.ko || { log "insmod wlan FAILED"; exit 1; }
 	log "wlan loaded"
