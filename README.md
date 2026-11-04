@@ -1,110 +1,124 @@
 # sky-qcacld-3.0-mainline
 
-Xiaomi Redmi 12 5G（`sky` / SM4450 `ravelin`）+ **WCN6750 `adrastea`**（SNOC）
-上把 **qcacld-3.0 主线化（mainline 化）** 的工作记录、源码快照、模块与固件。
+Mainlining **qcacld-3.0** on **Linux 7.3** for the Xiaomi Redmi 12 5G
+(`sky` / SM4450 "ravelin") with the **WCN6750 "adrastea"** SNOC WLAN chip.
 
-目标内核：**Linux 7.3**（mainline），非 Android、非 downstream 5.10。
+This repository holds the working sources, built kernel modules, firmware, device tree,
+patches and the full investigation log.
+
+> Chinese version: [`README.zh.md`](README.zh.md) · Build guide: [`build/BUILD.md`](build/BUILD.md)
 
 ---
 
-## 1. 为什么不用 ath11k（本机 WiFi 的特殊性）
+## 1. Why not ath11k (what makes this device special)
 
-本项目最初的目标是 mainline `ath11k`（上游确实有 `ath11k_hw_wcn6750` / `qcom,wcn6750-wifi`）。
-在真机上做了完整测量后确认**在这台设备上不可行**，原因是硬件/固件的寄存器访问模型：
+The project started with mainline `ath11k` (upstream does support
+`ath11k_hw_wcn6750` / `qcom,wcn6750-wifi`). Measurements on real hardware showed that
+**the mainline ath11k model cannot work on this device**, because of how the
+APSS is allowed to reach WCSS registers:
 
-| 实测结论 | 证据 |
+| Finding (measured on hardware) | Evidence |
 |---|---|
-| 8 MiB `membase`（`0x22800000`）窗口里，**只有 `0x20000..0x52000`（SR_APSS）可访问** | `membase+0x240000`(CE0)、`+0x24C000`(CE wrapper)、`+0x2xxxxx` 全部 DEAD；`0x22850000..0x23000000` 123 个探针 0 live |
-| 主机唯一可写的寄存器通道 = **SR_APSS 影子槽** | `WLAN_CFG` 带 `shadow_reg`(v1) 12 条表后 `ADDRESS_VALID=0xf860b9`（12 槽），写 `SHADOW_VALUE[n]` 被硬件转发（`DIRTY` 消费、`INVALID_ADDR_ACCESS=0`） |
-| 影子槽只覆盖 **CE 写指针**（0x3C/0x40） | 槽位映射 = `src CE 0/3/4/5/7 → slot 0/3/4/5/7`，`dst CE 1/2/7/8/9/10/11 → slot 13/14/19/20/21/22/23` |
-| 主机**不能**编程 CE ring base/size、也不能碰 UMAC/WBM/REO/TCL | 零 MMIO 实验：把读写全过滤后，bring-up 只能跑到 HTC 然后超时 |
-| 固件**不会**替主机建 CE 环 | 同上；且实测主机在收到 HTC ready 前根本不会踢写指针 |
+| Inside the 8 MiB `membase` window (`0x22800000`) **only `0x20000..0x52000` (SR_APSS) is accessible** | `membase+0x240000` (CE0), `+0x24C000` (CE wrapper), `+0x2xxxxx` are all DEAD; a 123-probe scan of `0x22850000..0x23000000` returned 0 live pages |
+| The only host-writable register path is the **SR_APSS shadow-slot window** | After `WLAN_CFG` carries the `shadow_reg`(v1) table with 12 entries, `ADDRESS_VALID = 0xf860b9`; writes to `SHADOW_VALUE[n]` are forwarded (`DIRTY` consumed, `INVALID_ADDR_ACCESS = 0`) |
+| Shadow slots cover **CE write indices only** (offsets `0x3C` / `0x40`) | Slot map: `src CE 0/3/4/5/7 → slot 0/3/4/5/7`, `dst CE 1/2/7/8/9/10/11 → slot 13/14/19/20/21/22/23` |
+| The host **cannot** program CE ring base/size, nor touch UMAC/WBM/REO/TCL | Zero-MMIO experiment: with all reads/writes filtered out, bring-up only reaches HTC and then times out |
+| The firmware does **not** create the CE rings for the host | Same experiment; the host never even kicks a write index before HTC-ready arrives |
 
-⇒ mainline ath11k 的「主机编程 CE/DP 环」模型在这颗芯片上**不可能工作**；
-原厂用的是 **qcacld-3.0 `adrastea` profile + icnss2**（数据面由固件自管）。
-所以本项目改为：**把 qcacld-3.0 / icnss2 主线化到 Linux 7.3**。
+⇒ The mainline ath11k model ("host programs CE/DP rings") is **impossible** on this chip.
+The vendor solution is **qcacld-3.0 `adrastea` profile + icnss2**, where the datapath is
+firmware-managed. This project therefore **mainlines qcacld-3.0 / icnss2 onto Linux 7.3**.
 
-> 完整的 ath11k 阶段记录（含所有实验、寄存器扫描、影子寄存器机制推导）在
-> `docs/FINDINGS-session6..9-*.md` 与 `docs/HANDOFF-snoc-mainline.md`。
+> The complete ath11k-era investigation (register scans, shadow-register mechanism,
+> QMI sequence analysis) lives in `docs/FINDINGS-session6..9-*.md`
+> and `docs/HANDOFF-snoc-mainline.md`.
 
 ---
 
-## 2. 当前成果
+## 2. Current status
 
-在 mainline 7.3 上：
+Running on mainline 7.3:
 
 ```
 icnss2: Platform driver probed successfully
 fw_version: 0x3431fb72 (2024-09-03, WLAN.HL.3.4.3-00346-QCAHLSWMTPLZ-1.31602.10)
-REGDB / BDF 下载成功（QMI WLFW）
+REGDB / BDF download over QMI WLFW: OK
 cal report → icnss2: WLAN FW is ready: 0x487
-wlan.ko 加载 → wlan0 (managed) 出现，MAC 00:0a:f5:a0:f6:c7
-iw dev wlan0 scan → 成功列出周边 AP
+wlan.ko loads → wlan0 (managed) appears, MAC 00:0a:f5:a0:f6:c7
+iw dev wlan0 scan → lists neighbouring APs
 ```
 
-已修复的三个真实 bug（详见 `docs/FINDINGS-qcacld-device-test-2026-11-04.md` §21）：
+Three real bugs were found and fixed (details in
+`docs/FINDINGS-qcacld-device-test-2026-11-04.md` §21):
 
-1. **icnss2 取 IRQ**：`platform_get_resource(pdev, IORESOURCE_IRQ, i)` → 平台设备无资源表；
-   改 `platform_get_irq(pdev, i)`。
-2. **qcacld `cfg_parse` 失败**：`WLAN_INI_FILE` 是相对路径 `wlan/qca_cld/WCNSS_qcom_cfg.ini`，
-   需把 ini 放到 `/lib/firmware/wlan/qca_cld/` 与 `/vendor/firmware/wlan/qca_cld/`。
-3. **NAPI oops**：`struct qca_napi_info` 内嵌 `net_device` 未初始化，7.3 的
-   `netif_napi_add_weight_locked()` 会操作 `dev->napi_list`；`init_dummy_netdev()`
-   未导出，改为手工 `INIT_LIST_HEAD(&dev->napi_list)` + `reg_state`。
+1. **icnss2 IRQ acquisition** — `platform_get_resource(pdev, IORESOURCE_IRQ, i)` fails because
+   the platform device has no resource table on this platform; switched to
+   `platform_get_irq(pdev, i)` (which falls back to DT parsing).
+2. **qcacld `cfg_parse` failure** — `WLAN_INI_FILE` is the relative path
+   `wlan/qca_cld/WCNSS_qcom_cfg.ini`; the ini must be present at
+   `/lib/firmware/wlan/qca_cld/` (and `/vendor/firmware/wlan/qca_cld/`).
+3. **NAPI oops** — the embedded `net_device` inside `struct qca_napi_info` was never
+   initialised, while Linux 7.3's `netif_napi_add_weight_locked()` touches `dev->napi_list`.
+   `init_dummy_netdev()` is not exported, so it is initialised manually.
 
-补丁见 `patch/`，说明见 `docs/`。
+Patches: `patch/`. Full log: `docs/`.
 
 ---
 
-## 3. 目录结构
+## 3. Repository layout
 
 ```
-README.md                    本文
-docs/                        全部交接与实验记录（ath11k 阶段 + qcacld 阶段）
-dts/                         sm4450-xiaomi-sky.dts（含 icnss 节点、触屏修复）+ attic 历史版
-src/icnss2/                  icnss2 平台驱动源码 + wlan_firmware_service_v01.{c,h} + port.mk（构建入口）
-src/qcacld-3.0/              qcacld-3.0 源码（已剔除 *.o/*.cmd 等构建中间件）
-src/qca-wifi-host-cmn/       qcacld 共享组件源码（同上）
-build/                       BUILD.md、port.mk、build.sh、内核 config 片段、versions.txt
-modules/                     已构建模块：wlan.ko / icnss2.ko / wlan_firmware_service.ko / cnss_utils.ko
-firmware/                    日版原厂 adrastea 固件（NON-HLOS.bin 提取）+ regdb/BDF
-patch/                       本次主线化所做的源码改动（unified diff）
+README.md                    this file (English, default)
+README.zh.md                 Chinese version
+docs/                        full handoff + experiment log (ath11k era and qcacld era)
+dts/                         sm4450-xiaomi-sky.dts (icnss node + touch fixes) + attic/
+src/icnss2/                  icnss2 platform driver, wlan_firmware_service_v01.{c,h}, port.mk
+src/qcacld-3.0/              qcacld-3.0 sources (build artefacts stripped)
+src/qca-wifi-host-cmn/       shared components (HIF/CE/QDF)
+build/                       BUILD.md, port.mk, build.sh, kernel config fragment, versions.txt
+modules/                     built modules: wlan.ko, icnss2.ko, wlan_firmware_service.ko, cnss_utils.ko
+firmware/                    stock (JP) adrastea firmware + regdb/BDF, extracted from NON-HLOS.bin
+patch/                       source changes made for the mainline port (unified diffs)
 ```
 
-## 4. 构建
+## 4. Build
 
-**完整构建说明见 [`build/BUILD.md`](build/BUILD.md)**（环境/版本、三步构建、DTB、镜像打包、
-部署、常见错误对照）。一键脚本：`KERNEL_SRC=/path/to/linux-7.3 build/build.sh all`。
+See **[`build/BUILD.md`](build/BUILD.md)** for the full guide (versions, three-step build,
+DTB, boot-image packaging, deployment, troubleshooting table).
+One-shot script: `KERNEL_SRC=/path/to/linux-7.3 build/build.sh all`
 
 ```sh
-make -C src/icnss2 -f port.mk KERNEL_SRC=$KERNEL_SRC dependencies   # cnss_utils 等
+make -C src/icnss2 -f port.mk KERNEL_SRC=$KERNEL_SRC dependencies   # cnss_utils etc.
 make -C src/icnss2 -f port.mk KERNEL_SRC=$KERNEL_SRC platform       # → icnss2.ko
 make -C src/icnss2 -f port.mk KERNEL_SRC=$KERNEL_SRC \
      WLAN_DIR=$PWD/src/qcacld-3.0 wlan                              # → wlan.ko
 ```
-关键编译开关（`port.mk`）：
+
+Key switches (fixed in `port.mk`):
 `CONFIG_ICNSS2=m CONFIG_ICNSS2_QMI=y CONFIG_PLD_SNOC_ICNSS_FLAG=y CONFIG_WIFI_3_0_ADRASTEA=y
 CONFIG_ADRASTEA_SHADOW_REGISTERS=y CONFIG_ADRASTEA_RRI_ON_DDR=y CONFIG_HIF_SNOC=y`
 
-## 5. 上机加载（一次开机只能加载一次，`CONFIG_MODULE_UNLOAD=n`）
+## 5. Loading on the device (one `insmod` per boot: `CONFIG_MODULE_UNLOAD=n`)
 
 ```sh
-# 固件与配置（必须）
-#   /lib/firmware/qcom/sm4450/xiaomi-sky/wpss.*        （remote processor 固件）
-#   /lib/firmware/adrastea/{regdb.bin,bdwlant_*.bin}    （QMI BDF 下载用）
-#   /lib/firmware/wlan/qca_cld/WCNSS_qcom_cfg.ini       （qcacld ini，路径敏感）
+# Required files
+#   /lib/firmware/qcom/sm4450/xiaomi-sky/wpss.*        remote-processor firmware
+#   /lib/firmware/adrastea/{regdb.bin,bdwlant_*.bin}   BDF/regdb downloaded over QMI
+#   /lib/firmware/wlan/qca_cld/WCNSS_qcom_cfg.ini      qcacld ini (path-sensitive)
 
 insmod wlan_firmware_service.ko
-insmod icnss2.ko            # 等 ~8s，期望 "WLAN FW is ready: 0x487"
-insmod wlan.ko              # 期望 wlan0 出现
+insmod icnss2.ko            # wait ~8 s: expect "WLAN FW is ready: 0x487"
+insmod wlan.ko              # expect wlan0 to appear
 ip link set wlan0 up && iw dev wlan0 scan
 ```
 
-## 6. 已知限制 / TODO
+## 6. Known limitations / TODO
 
-* 尚未做 WPA2/WPA3 连接、DHCP、吞吐测试。
-* cfg80211 重点项未验证：ROC cookie、mgmt TX status、change_beacon、control-port、key 管理。
-* SSR（WPSS 重启）恢复路径未验证。
-* 模块只能在**匹配的内核**上加载（vermagic `7.3.0-g78458d4eea4e-dirty`），
-  换内核需重新编译。
-* 设备树依赖 `qcom,icnss` 节点（见 `dts/`），且 MSA 使用原厂 12 MiB 配置。
+* No association (WPA2/WPA3), DHCP or throughput testing yet.
+* cfg80211 specifics not verified: ROC cookie, mgmt TX status, change_beacon,
+  control port, key install/reconnect/delete.
+* SSR (WPSS restart) recovery path not verified.
+* Modules are bound to the exact kernel (`vermagic 7.3.0-g78458d4eea4e-dirty`);
+  rebuilding is required for any other kernel.
+* The device tree must provide the `qcom,icnss` node (see `dts/`), with the stock
+  12 MiB MSA reservation.
