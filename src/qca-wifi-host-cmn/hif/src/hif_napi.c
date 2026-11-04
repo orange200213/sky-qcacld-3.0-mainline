@@ -104,6 +104,15 @@ static void hif_init_rx_thread_napi(struct qca_napi_info *napii)
  */
 static void hif_deinit_rx_thread_napi(struct qca_napi_info *napii)
 {
+	/* sky: since ~6.12 NAPI_STATE_SCHED is SET while the NAPI is disabled and
+	 * __netif_napi_del_locked() warns when it is still enabled. hif_init_rx_thread_napi()
+	 * calls napi_enable(), so disable first -- otherwise:
+	 *   WARNING: net/core/dev.c:__netif_napi_del_locked
+	 * (napi_disable() spins until SCHED/NPSVC clear, so only call it when enabled.)
+	 */
+	if (!test_bit(NAPI_STATE_SCHED, &napii->rx_thread_napi.state))
+		napi_disable(&napii->rx_thread_napi);
+
 	netif_napi_del(&napii->rx_thread_napi);
 }
 #else /* RECEIVE_OFFLOAD */
