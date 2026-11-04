@@ -6,7 +6,7 @@ Mainlining **qcacld-3.0** on **Linux 7.3** for the Xiaomi Redmi 12 5G
 This repository holds the working sources, built kernel modules, firmware, device tree,
 patches and the full investigation log.
 
-> Chinese version: [`README.zh.md`](README.zh.md) · Build guide: [`build/BUILD.md`](build/BUILD.md)
+> Chinese version: [`README.zh.md`](README.zh.md) · **Install guide: [`INSTALL.md`](INSTALL.md)** · Build guide: [`build/BUILD.md`](build/BUILD.md)
 
 ---
 
@@ -98,7 +98,7 @@ Key switches (fixed in `port.mk`):
 `CONFIG_ICNSS2=m CONFIG_ICNSS2_QMI=y CONFIG_PLD_SNOC_ICNSS_FLAG=y CONFIG_WIFI_3_0_ADRASTEA=y
 CONFIG_ADRASTEA_SHADOW_REGISTERS=y CONFIG_ADRASTEA_RRI_ON_DDR=y CONFIG_HIF_SNOC=y`
 
-## 5. Loading on the device (one `insmod` per boot: `CONFIG_MODULE_UNLOAD=n`)
+## 5. Loading on the device (see [`INSTALL.md`](INSTALL.md) for the full step-by-step guide) (one `insmod` per boot: `CONFIG_MODULE_UNLOAD=n`)
 
 ```sh
 # Required files
