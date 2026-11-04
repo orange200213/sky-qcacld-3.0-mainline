@@ -1,0 +1,46 @@
+--- /home/orange/redmi125g/sky-linux/third_party/micode-sky-t-oss/qcacld-3.0/core/hdd/src/wlan_hdd_driver_ops.c.bak-20261104	2026-11-04 14:52:28.252530222 +0900
++++ /home/orange/redmi125g/sky-linux/third_party/micode-sky-t-oss/qcacld-3.0/core/hdd/src/wlan_hdd_driver_ops.c	2026-11-04 14:52:28.266067726 +0900
+@@ -602,10 +602,12 @@
+ 	cds_set_recovery_in_progress(false);
+ 
+ 	errno = hdd_init_qdf_ctx(dev, bdev, bus_type, bid);
++	pr_err("sky-dbg: hdd_init_qdf_ctx=%d\n", errno);
+ 	if (errno)
+ 		goto unlock;
+ 
+ 	errno = hdd_init_dma_mask(dev, bus_type);
++	pr_err("sky-dbg: hdd_init_dma_mask=%d\n", errno);
+ 	if (errno)
+ 		goto unlock;
+ 
+@@ -615,7 +617,9 @@
+ 		goto assert_fail_count;
+ 	}
+ 
++	pr_err("sky-dbg: hdd_context_create ok\n");
+ 	status = dp_prealloc_init((struct cdp_ctrl_objmgr_psoc *)hdd_ctx->psoc);
++	pr_err("sky-dbg: dp_prealloc_init=%d\n", status);
+ 
+ 	if (status != QDF_STATUS_SUCCESS) {
+ 		errno = qdf_status_to_os_return(status);
+@@ -623,10 +627,12 @@
+ 	}
+ 
+ 	errno = hdd_wlan_startup(hdd_ctx);
++	pr_err("sky-dbg: hdd_wlan_startup=%d\n", errno);
+ 	if (errno)
+ 		goto hdd_context_destroy;
+ 
+ 	status = hdd_psoc_create_vdevs(hdd_ctx);
++	pr_err("sky-dbg: hdd_psoc_create_vdevs=%d\n", status);
+ 	if (QDF_IS_STATUS_ERROR(status)) {
+ 		errno = qdf_status_to_os_return(status);
+ 		goto wlan_exit;
+@@ -690,6 +696,7 @@
+ 	hdd_info("probing driver");
+ 
+ 	errno = osif_psoc_sync_create_and_trans(&psoc_sync);
++	pr_err("sky-dbg: osif_psoc_sync_create_and_trans=%d\n", errno);
+ 	if (errno)
+ 		return errno;
+ 

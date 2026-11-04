@@ -1,0 +1,46 @@
+--- /home/orange/redmi125g/sky-linux/third_party/micode-sky-t-oss/qcacld-3.0/core/hdd/src/wlan_hdd_main.c.bak-20261104	2026-11-04 15:16:30.621082885 +0900
++++ /home/orange/redmi125g/sky-linux/third_party/micode-sky-t-oss/qcacld-3.0/core/hdd/src/wlan_hdd_main.c	2026-11-04 15:16:30.651527455 +0900
+@@ -13592,6 +13592,7 @@
+ 	hdd_enter();
+ 
+ 	hdd_ctx = hdd_cfg80211_wiphy_alloc();
++	pr_err("sky-dbg2: wiphy_alloc=%s\n", IS_ERR_OR_NULL(hdd_ctx) ? "FAIL" : "ok");
+ 	if (!hdd_ctx) {
+ 		ret = -ENOMEM;
+ 		goto err_out;
+@@ -13614,7 +13615,9 @@
+ 		goto err_free_hdd_context;
+ 	}
+ 
++	pr_err("sky-dbg2: pre-cfg_parse (%s)\n", WLAN_INI_FILE);
+ 	status = cfg_parse(WLAN_INI_FILE);
++	pr_err("sky-dbg2: cfg_parse=%d\n", status);
+ 	if (QDF_IS_STATUS_ERROR(status)) {
+ 		hdd_err("Failed to parse cfg %s; status:%d\n",
+ 			WLAN_INI_FILE, status);
+@@ -13626,7 +13629,9 @@
+ 
+ 	status = hdd_cfg_parse_connection_roaming_cfg();
+ 
++	pr_err("sky-dbg2: roaming_cfg=%d\n", status);
+ 	ret = hdd_objmgr_create_and_store_psoc(hdd_ctx, DEFAULT_PSOC_ID);
++	pr_err("sky-dbg2: objmgr_create=%d\n", ret);
+ 	if (ret) {
+ 		QDF_DEBUG_PANIC("Psoc creation fails!");
+ 		goto err_release_store;
+@@ -13646,6 +13651,7 @@
+ 	hdd_override_ini_config(hdd_ctx);
+ 
+ 	ret = hdd_context_init(hdd_ctx);
++	pr_err("sky-dbg2: hdd_context_init=%d\n", ret);
+ 
+ 	if (ret)
+ 		goto err_hdd_objmgr_destroy;
+@@ -13655,6 +13661,7 @@
+ 
+ 	cds_set_multicast_logging(hdd_ctx->config->multicast_host_fw_msgs);
+ 	ret = hdd_init_netlink_services(hdd_ctx);
++	pr_err("sky-dbg2: netlink_services=%d\n", ret);
+ 	if (ret)
+ 		goto err_deinit_hdd_context;
+ 

@@ -1,0 +1,22 @@
+--- /home/orange/redmi125g/sky-linux/third_party/micode-sky-t-oss/qca-wifi-host-cmn/hif/src/hif_napi.c.bak-20261104	2026-11-04 15:22:20.357434978 +0900
++++ /home/orange/redmi125g/sky-linux/third_party/micode-sky-t-oss/qca-wifi-host-cmn/hif/src/hif_napi.c	2026-11-04 15:23:17.041653229 +0900
+@@ -83,6 +83,9 @@
+ 
+ 	qdf_net_if_create_dummy_if(nd);
+ #ifdef QCA_MAINLINE_AES_KEY_API
++	/* sky: 7.3 needs dev->napi_list initialised; init_dummy_netdev() is not exported */
++	INIT_LIST_HEAD(&napii->rx_thread_netdev.napi_list);
++	napii->rx_thread_netdev.reg_state = NETREG_UNREGISTERED;
+ 	netif_napi_add_weight(&napii->rx_thread_netdev,
+ 			      &napii->rx_thread_napi,
+ 			      hif_rxthread_napi_poll, 64);
+@@ -213,6 +216,9 @@
+ 		NAPI_DEBUG("adding napi=%pK to netdev=%pK (poll=%pK, bdgt=%d)",
+ 			   &(napii->napi), &(napii->netdev), poll, budget);
+ #ifdef QCA_MAINLINE_AES_KEY_API
++		/* sky: 7.3 needs dev->napi_list initialised */
++		INIT_LIST_HEAD(&napii->netdev.napi_list);
++		napii->netdev.reg_state = NETREG_UNREGISTERED;
+ 		netif_napi_add_weight(&(napii->netdev), &(napii->napi),
+ 				      poll, budget);
+ #else
