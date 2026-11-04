@@ -1,0 +1,20 @@
+#!/sbin/openrc-run
+# sky WLAN: mainlined qcacld-3.0 + icnss2 (WCN6750 adrastea)
+description="sky WLAN stack (icnss2 + qcacld)"
+
+depend() {
+	need localmount
+	before net
+	provide wifi
+}
+
+start() {
+	ebegin "Starting sky WLAN stack"
+	/usr/local/sbin/sky-wifi-load.sh >>/log/wifi-load.log 2>&1
+	eend $? "see /log/wifi-load.log"
+}
+
+stop() {
+	ebegin "Stopping sky WLAN (not supported: CONFIG_MODULE_UNLOAD=n)"
+	eend 0
+}
