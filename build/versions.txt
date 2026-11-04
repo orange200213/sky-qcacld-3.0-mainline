@@ -1,0 +1,13 @@
+# 版本记录（构建这些模块时的实际环境）
+kernel      : 7.3.0  (git describe: 78458d4ee-dirty)
+vermagic    : 7.3.0-g78458d4eea4e-dirty SMP preempt aarch64
+gcc         : 13.3.0
+binutils    : 2.42
+arch        : arm64 (aarch64-linux-gnu-)
+built on    : 2026-11-04 15:34
+
+# 产物 md5
+4263db5976a511b66354dc4758a8ab2a  modules/cnss_utils.ko
+e279bc58c257a69dafac3c914b2f34e1  modules/icnss2.ko
+e468d18624449535676e4fd583fbdc80  modules/wlan_firmware_service.ko
+3adcf546046b5aa2295ecc5f9a63db17  modules/wlan.ko
