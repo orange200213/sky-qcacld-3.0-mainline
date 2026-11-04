@@ -65,19 +65,22 @@ dts/                         sm4450-xiaomi-sky.dts（含 icnss 节点、触屏�
 src/icnss2/                  icnss2 平台驱动源码 + wlan_firmware_service_v01.{c,h} + port.mk（构建入口）
 src/qcacld-3.0/              qcacld-3.0 源码（已剔除 *.o/*.cmd 等构建中间件）
 src/qca-wifi-host-cmn/       qcacld 共享组件源码（同上）
-modules/                     已构建模块：wlan.ko / icnss2.ko / wlan_firmware_service.ko
+build/                       BUILD.md、port.mk、build.sh、内核 config 片段、versions.txt
+modules/                     已构建模块：wlan.ko / icnss2.ko / wlan_firmware_service.ko / cnss_utils.ko
 firmware/                    日版原厂 adrastea 固件（NON-HLOS.bin 提取）+ regdb/BDF
 patch/                       本次主线化所做的源码改动（unified diff）
 ```
 
 ## 4. 构建
 
+**完整构建说明见 [`build/BUILD.md`](build/BUILD.md)**（环境/版本、三步构建、DTB、镜像打包、
+部署、常见错误对照）。一键脚本：`KERNEL_SRC=/path/to/linux-7.3 build/build.sh all`。
+
 ```sh
-# 依赖：Linux 7.3 内核树（KERNEL_SRC），aarch64 交叉工具链
-cd src/icnss2
-make -f port.mk dependencies     # cnss_utils / qmi 相关
-make -f port.mk platform         # → icnss2.ko
-make -f port.mk wlan             # → qcacld-3.0/wlan.ko
+make -C src/icnss2 -f port.mk KERNEL_SRC=$KERNEL_SRC dependencies   # cnss_utils 等
+make -C src/icnss2 -f port.mk KERNEL_SRC=$KERNEL_SRC platform       # → icnss2.ko
+make -C src/icnss2 -f port.mk KERNEL_SRC=$KERNEL_SRC \
+     WLAN_DIR=$PWD/src/qcacld-3.0 wlan                              # → wlan.ko
 ```
 关键编译开关（`port.mk`）：
 `CONFIG_ICNSS2=m CONFIG_ICNSS2_QMI=y CONFIG_PLD_SNOC_ICNSS_FLAG=y CONFIG_WIFI_3_0_ADRASTEA=y
