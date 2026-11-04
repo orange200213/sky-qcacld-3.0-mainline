@@ -460,6 +460,9 @@ static void htt_t2h_lp_msg_handler(void *context, qdf_nbuf_t htt_t2h_msg,
 		struct htt_mgmt_tx_compl_ind *compl_msg;
 		int32_t credit_delta = 1;
 		int msg_len = qdf_nbuf_len(htt_t2h_msg);
+
+		pr_err("sky-dbg4: MGMT_TX_COMPL_IND arrived len=%d mgmt_over_wmi=%d\n",
+		       msg_len, ol_tx_get_is_mgmt_over_wmi_enabled());
 		if (msg_len < (sizeof(struct htt_mgmt_tx_compl_ind) + sizeof(*msg_word))) {
 			QDF_TRACE(QDF_MODULE_ID_HTT, QDF_TRACE_LEVEL_ERROR,
 				  "Invalid msg_word length in HTT_T2H_MSG_TYPE_MGMT_TX_COMPL_IND");

@@ -4249,6 +4249,8 @@ lim_cm_handle_disconnect_req(struct wlan_cm_vdev_discon_req *req)
 	if (!mac_ctx)
 		return QDF_STATUS_E_INVAL;
 
+	pr_err("sky-dbg3: disconnect_req vdev=%d cm_id=0x%x source=%d\n",
+	       req->req.vdev_id, req->cm_id, req->req.source);
 	pe_session = lim_get_disconnect_session(mac_ctx, req);
 	if (!pe_session) {
 		pe_err("vdev_id %d cm_id 0x%x: bssid " QDF_MAC_ADDR_FMT " : no session found",

@@ -1028,6 +1028,16 @@ ol_tx_completion_handler(ol_txrx_pdev_handle pdev,
 	u_int32_t *msg_word_header = (u_int32_t *)msg;
 	/*msg_word skip header*/
 	u_int32_t *msg_word_payload = msg_word_header + 1;
+
+	/* sky-dbg3: is the target->host TX completion path alive at all? */
+	{
+		static unsigned int sky_txc_cnt;
+
+		if (sky_txc_cnt < 8 || (sky_txc_cnt % 512) == 0)
+			pr_err("sky-dbg3: tx_compl #%u num_msdus=%d status=%d\n",
+			       sky_txc_cnt, num_msdus, status);
+		sky_txc_cnt++;
+	}
 	u_int32_t *msg_word = (u_int32_t *)msg;
 	u_int16_t *desc_ids = (u_int16_t *)(msg_word + 1);
 	union ol_tx_desc_list_elem_t *lcl_freelist = NULL;
