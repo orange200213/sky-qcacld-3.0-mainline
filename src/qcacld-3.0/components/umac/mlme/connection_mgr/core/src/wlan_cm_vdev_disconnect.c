@@ -379,8 +379,10 @@ QDF_STATUS cm_handle_disconnect_resp(struct scheduler_msg *msg)
 		return QDF_STATUS_E_INVAL;
 	}
 
+	pr_err("sky-dbgB: cm_handle_disconnect_resp ENTER vdev=%u\n", ind->vdev_id);
 	qdf_mem_zero(&resp, sizeof(resp));
 	status = cm_fill_disconnect_resp(vdev, &resp);
+	pr_err("sky-dbgB: cm_fill_disconnect_resp status=%d\n", status);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		mlme_err("Active disconnect not found for vdev %d",
 			 ind->vdev_id);
@@ -392,7 +394,9 @@ QDF_STATUS cm_handle_disconnect_resp(struct scheduler_msg *msg)
 	if (resp.req.req.source == CM_PEER_DISCONNECT)
 		cm_copy_peer_disconnect_ies(vdev, &resp.ap_discon_ie);
 
+	pr_err("sky-dbgB: calling wlan_cm_disconnect_rsp\n");
 	status = wlan_cm_disconnect_rsp(vdev, &resp);
+	pr_err("sky-dbgB: wlan_cm_disconnect_rsp status=%d\n", status);
 	mlme_free_peer_disconnect_ies(vdev);
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
 

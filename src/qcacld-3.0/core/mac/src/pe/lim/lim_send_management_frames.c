@@ -3477,6 +3477,8 @@ alloc_packet:
 
 QDF_STATUS lim_send_deauth_cnf(struct mac_context *mac_ctx)
 {
+	pr_err("sky-dbgA: lim_send_deauth_cnf entry pMlmDeauthReq=%s\n",
+	       mac_ctx->lim.limDisassocDeauthCnfReq.pMlmDeauthReq ? "set" : "NULL");
 	uint16_t aid;
 	tpDphHashNode sta_ds;
 	tLimMlmDeauthReq *deauth_req;
@@ -3694,6 +3696,7 @@ QDF_STATUS lim_disassoc_tx_complete_cnf(void *context,
 					uint32_t tx_success,
 					void *params)
 {
+	pr_err("sky-dbg8: lim_disassoc_tx_complete_cnf tx_success=%u\n", tx_success);
 	struct mac_context *max_ctx = (struct mac_context *)context;
 
 	pe_debug("tx_success: %d", tx_success);
@@ -3706,6 +3709,8 @@ static QDF_STATUS lim_disassoc_tx_complete_cnf_handler(void *context,
 						       uint32_t tx_success,
 						       void *params)
 {
+	pr_err("sky-dbg8: disassoc_tx_complete_cnf_handler tx_success=%u buf=%s ctx=%px params=%px\n",
+	       tx_success, buf ? "yes" : "no", context, params);
 	struct mac_context *max_ctx = (struct mac_context *)context;
 	QDF_STATUS status_code;
 	struct scheduler_msg msg = {0};
@@ -3723,6 +3728,7 @@ static QDF_STATUS lim_disassoc_tx_complete_cnf_handler(void *context,
 	msg.bodyval = tx_success;
 
 	status_code = lim_post_msg_high_priority(max_ctx, &msg);
+	pr_err("sky-dbg8: post WMA_DISASSOC_TX_COMP ret=%d\n", status_code);
 	if (status_code != QDF_STATUS_SUCCESS)
 		pe_err("posting message: %X to LIM failed, reason: %d",
 		       msg.type, status_code);
@@ -3733,6 +3739,8 @@ QDF_STATUS lim_deauth_tx_complete_cnf(void *context,
 				      uint32_t tx_success,
 				      void *params)
 {
+	pr_err("sky-dbg9: lim_deauth_tx_complete_cnf tx_success=%u ctx=%px\n",
+	       tx_success, context);
 	struct mac_context *mac_ctx = (struct mac_context *)context;
 
 	pe_debug("tx_success: %d", tx_success);
@@ -3745,6 +3753,8 @@ static QDF_STATUS lim_deauth_tx_complete_cnf_handler(void *context,
 						     uint32_t tx_success,
 						     void *params)
 {
+	pr_err("sky-dbg9: deauth_tx_complete_cnf_handler tx_success=%u buf=%s ctx=%px params=%px\n",
+	       tx_success, buf ? "yes" : "no", context, params);
 	struct mac_context *mac_ctx = (struct mac_context *)context;
 	QDF_STATUS status_code;
 	struct scheduler_msg msg = {0};
@@ -3766,6 +3776,11 @@ static QDF_STATUS lim_deauth_tx_complete_cnf_handler(void *context,
 	if (deauth_req)
 		session = pe_find_session_by_session_id(mac_ctx,
 				deauth_req->sessionId);
+
+	pr_err("sky-dbgA: deauth_compl_handler tx_success=%u pMlmDeauthReq=%s session=%s retry=%u\n",
+	       tx_success, deauth_req ? "set" : "NULL",
+	       session ? "found" : "NULL",
+	       session ? session->deauth_retry.retry_cnt : 0);
 	if (tx_success != WMI_MGMT_TX_COMP_TYPE_COMPLETE_OK && session &&
 	    session->deauth_retry.retry_cnt) {
 		if (tx_timer_running(
@@ -3784,6 +3799,8 @@ static QDF_STATUS lim_deauth_tx_complete_cnf_handler(void *context,
 	msg.bodyval = tx_success;
 
 	status_code = lim_post_msg_high_priority(mac_ctx, &msg);
+	pr_err("sky-dbgA: posted WMA_DEAUTH_TX_COMP ret=%d bodyval=%u\n",
+	       status_code, tx_success);
 	if (status_code != QDF_STATUS_SUCCESS)
 		pe_err("posting message: %X to LIM failed, reason: %d",
 		       msg.type, status_code);

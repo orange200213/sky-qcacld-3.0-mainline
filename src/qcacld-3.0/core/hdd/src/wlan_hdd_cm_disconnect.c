@@ -321,19 +321,35 @@ hdd_cm_disconnect_complete_pre_user_update(struct wlan_objmgr_vdev *vdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	pr_err("sky-c2c: [1/6] -> hdd_conn_set_authenticated vdev=%u cm_id=0x%x\n",
+	       wlan_vdev_get_id(vdev), rsp->req.cm_id);
 	hdd_conn_set_authenticated(adapter, false);
-	hdd_napi_serialize(0);
-	hdd_disable_and_flush_mc_addr_list(adapter, pmo_peer_disconnect);
-	__hdd_cm_disconnect_handler_pre_user_update(adapter);
+	pr_err("sky-c2c: [1/6] <- hdd_conn_set_authenticated\n");
 
+	pr_err("sky-c2c: [2/6] -> hdd_napi_serialize\n");
+	hdd_napi_serialize(0);
+	pr_err("sky-c2c: [2/6] <- hdd_napi_serialize\n");
+
+	pr_err("sky-c2c: [3/6] -> hdd_disable_and_flush_mc_addr_list\n");
+	hdd_disable_and_flush_mc_addr_list(adapter, pmo_peer_disconnect);
+	pr_err("sky-c2c: [3/6] <- hdd_disable_and_flush_mc_addr_list\n");
+
+	pr_err("sky-c2c: [4/6] -> __hdd_cm_disconnect_handler_pre_user_update\n");
+	__hdd_cm_disconnect_handler_pre_user_update(adapter);
+	pr_err("sky-c2c: [4/6] <- __hdd_cm_disconnect_handler_pre_user_update\n");
+
+	pr_err("sky-c2c: [5/6] -> hdd_handle_disassociation_event\n");
 	hdd_handle_disassociation_event(adapter, &rsp->req.req.bssid);
+	pr_err("sky-c2c: [5/6] <- hdd_handle_disassociation_event\n");
 
 	wlan_rec_conn_info(adapter->vdev_id, DEBUG_CONN_DISCONNECT_HANDLER,
 			   rsp->req.req.bssid.bytes,
 			   rsp->req.cm_id,
 			   rsp->req.req.reason_code << 16 |
 			   rsp->req.req.source);
+	pr_err("sky-c2c: [6/6] -> hdd_ipa_set_tx_flow_info\n");
 	hdd_ipa_set_tx_flow_info();
+	pr_err("sky-c2c: [6/6] <- hdd_ipa_set_tx_flow_info\n");
 	/*
 	 * Convert and cache internal reason code in adapter. This can be
 	 * sent to userspace with a vendor event.

@@ -1934,6 +1934,8 @@ static void lim_process_messages(struct mac_context *mac_ctx,
 					     msg->bodyptr);
 		break;
 	case WMA_DEAUTH_TX_COMP:
+		pr_err("sky-dbgA: LIM got WMA_DEAUTH_TX_COMP bodyval=%u bodyptr=%px\n",
+		       msg->bodyval, msg->bodyptr);
 		lim_deauth_tx_complete_cnf(mac_ctx, msg->bodyval,
 					   msg->bodyptr);
 		break;

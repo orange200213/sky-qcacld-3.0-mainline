@@ -2780,6 +2780,17 @@ static int wma_process_mgmt_tx_completion(tp_wma_handle wma_handle,
 
 	buf = mgmt_txrx_get_nbuf(pdev, desc_id);
 
+	pr_err("sky-dbg6: mgmt_compl_process desc_id=%u status=%u buf=%s\n",
+	       desc_id, status, buf ? "found" : "NULL");
+	if (buf) {
+		uint8_t *fc = qdf_nbuf_data(buf);
+		uint16_t len = qdf_nbuf_len(buf);
+
+		if (fc && len >= 2)
+			pr_err("sky-dbg6:   frame fc=0x%02x%02x type=%u sub=%u len=%u\n",
+			       fc[1], fc[0], (fc[0] >> 2) & 0x3, (fc[0] >> 4) & 0xf, len);
+	}
+
 
 	if (buf)
 		wma_mgmt_unmap_buf(wma_handle, buf);
@@ -2790,6 +2801,9 @@ static int wma_process_mgmt_tx_completion(tp_wma_handle wma_handle,
 	wma_mgmt_pktdump_tx_handler(wma_handle, buf, vdev_id, status);
 	ret = mgmt_txrx_tx_completion_handler(pdev, desc_id, status,
 					      &mgmt_params);
+
+	pr_err("sky-dbg6: mgmt_txrx_tx_completion_handler ret=%d vdev=%d\n",
+	       ret, vdev_id);
 
 	if (ret != QDF_STATUS_SUCCESS) {
 		wma_err("Failed to process mgmt tx completion");
@@ -2842,6 +2856,9 @@ int wma_mgmt_tx_completion_handler(void *handle, uint8_t *cmpl_event_params,
 		return -EINVAL;
 	}
 	cmpl_params = param_buf->fixed_param;
+
+	pr_err("sky-dbg5: WMI mgmt_tx_compl event desc_id=%u status=%u\n",
+	       cmpl_params->desc_id, cmpl_params->status);
 
 	if ((ucfg_pkt_capture_get_pktcap_mode(wma_handle->psoc) &
 	    PKT_CAPTURE_MODE_MGMT_ONLY) && param_buf->mgmt_hdr) {

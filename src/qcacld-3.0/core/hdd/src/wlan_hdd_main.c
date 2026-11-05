@@ -11137,7 +11137,8 @@ void hdd_send_mscs_action_frame(struct hdd_context *hdd_ctx,
 {
 	uint64_t mscs_vo_pkt_delta;
 	unsigned long tx_vo_pkts = 0;
-	uint8_t cpu;
+	/* sky: uint8_t wraps at 256 while NUM_CPUS == NR_CPUS (512) -> infinite loop */
+	int cpu;
 	struct hdd_tx_rx_stats *stats = &adapter->hdd_stats.tx_rx_stats;
 
 	/*

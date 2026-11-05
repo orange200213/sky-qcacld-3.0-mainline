@@ -530,12 +530,75 @@ cm_clear_vdev_mlo_cap(struct wlan_objmgr_vdev *vdev)
 { }
 #endif /*WLAN_FEATURE_11BE_MLO*/
 
+/*
+ * sky C2: deliver the disconnect completion to OSIF/HDD outside of the CM state
+ * machine lock and after cm_remove_cmd()/qdf_event_set().  Calling it inline
+ * keeps cm_sm_lock held while osif_disconnect_handler() runs, which deadlocks
+ * (10 s scheduler watchdog -> forced FW assert -> SSR fails with -110).
+ */
+struct cm_osif_disconn_notify {
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_cm_discon_rsp resp;
+};
+
+static QDF_STATUS cm_osif_disconn_notify_cb(struct scheduler_msg *msg)
+{
+	struct cm_osif_disconn_notify *ctx = msg->bodyptr;
+
+	if (!ctx)
+		return QDF_STATUS_E_FAILURE;
+
+	pr_err("sky-c2: osif disconnect complete (deferred) vdev=%u cm_id=0x%x\n",
+	       wlan_vdev_get_id(ctx->vdev), ctx->resp.req.cm_id);
+	mlme_cm_osif_disconnect_complete(ctx->vdev, &ctx->resp);
+	wlan_objmgr_vdev_release_ref(ctx->vdev, WLAN_MLME_CM_ID);
+	qdf_mem_free(ctx);
+	msg->bodyptr = NULL;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static void cm_queue_osif_disconnect_notify(struct wlan_objmgr_vdev *vdev,
+					    struct wlan_cm_discon_rsp *resp)
+{
+	struct cm_osif_disconn_notify *ctx;
+	struct scheduler_msg msg = {0};
+	QDF_STATUS status;
+
+	ctx = qdf_mem_malloc(sizeof(*ctx));
+	if (!ctx)
+		return;
+
+	ctx->vdev = vdev;
+	qdf_mem_copy(&ctx->resp, resp, sizeof(ctx->resp));
+
+	status = wlan_objmgr_vdev_try_get_ref(vdev, WLAN_MLME_CM_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		qdf_mem_free(ctx);
+		return;
+	}
+
+	msg.bodyptr = ctx;
+	msg.callback = cm_osif_disconn_notify_cb;
+	status = scheduler_post_message(QDF_MODULE_ID_OS_IF, QDF_MODULE_ID_OS_IF,
+					QDF_MODULE_ID_OS_IF, &msg);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		pr_err("sky-c2: failed to queue osif disconnect notify\n");
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
+		qdf_mem_free(ctx);
+		return;
+	}
+	pr_err("sky-c2: queued osif disconnect notify vdev=%u cm_id=0x%x\n",
+	       wlan_vdev_get_id(vdev), resp->req.cm_id);
+}
+
 QDF_STATUS cm_notify_disconnect_complete(struct cnx_mgr *cm_ctx,
 					 struct wlan_cm_discon_rsp *resp)
 {
 	mlme_cm_disconnect_complete_ind(cm_ctx->vdev, resp);
 	mlo_sta_link_disconn_notify(cm_ctx->vdev, resp);
-	mlme_cm_osif_disconnect_complete(cm_ctx->vdev, resp);
+	/* sky C2: deferred, see cm_queue_osif_disconnect_notify() */
+	cm_queue_osif_disconnect_notify(cm_ctx->vdev, resp);
 	cm_if_mgr_inform_disconnect_complete(cm_ctx->vdev);
 	cm_inform_blm_disconnect_complete(cm_ctx->vdev, resp);
 
@@ -794,6 +857,8 @@ QDF_STATUS cm_disconnect_rsp(struct wlan_objmgr_vdev *vdev,
 	cm_id = cm_ctx->active_cm_id;
 	prefix = CM_ID_GET_PREFIX(cm_id);
 
+	pr_err("sky-dbgC: cm_disconnect_rsp active_cm_id=0x%x resp_cm_id=0x%x prefix=0x%x\n",
+	       cm_id, resp->req.cm_id, prefix);
 	if (prefix != DISCONNECT_REQ_PREFIX || cm_id != resp->req.cm_id) {
 		mlme_err(CM_PREFIX_FMT "Active cm_id 0x%x is different",
 			 CM_PREFIX_REF(wlan_vdev_get_id(vdev), resp->req.cm_id),
@@ -801,10 +866,12 @@ QDF_STATUS cm_disconnect_rsp(struct wlan_objmgr_vdev *vdev,
 		qdf_status = QDF_STATUS_E_FAILURE;
 		goto disconnect_complete;
 	}
+	pr_err("sky-dbgC: -> cm_sm_deliver_event(DISCONNECT_DONE)\n");
 	qdf_status =
 		cm_sm_deliver_event(vdev,
 				    WLAN_CM_SM_EV_DISCONNECT_DONE,
 				    sizeof(*resp), resp);
+	pr_err("sky-dbgC: <- cm_sm_deliver_event status=%d\n", qdf_status);
 	if (QDF_IS_STATUS_ERROR(qdf_status))
 		goto disconnect_complete;
 
@@ -816,7 +883,10 @@ disconnect_complete:
 	 * DISCONNECTING (some new cmd has changed the state of SM), so just
 	 * complete the disconnect command.
 	 */
-	return cm_disconnect_complete(cm_ctx, resp);
+	pr_err("sky-dbgC: -> cm_disconnect_complete\n");
+	qdf_status = cm_disconnect_complete(cm_ctx, resp);
+	pr_err("sky-dbgC: <- cm_disconnect_complete status=%d\n", qdf_status);
+	return qdf_status;
 }
 
 QDF_STATUS cm_bss_peer_delete_req(struct wlan_objmgr_vdev *vdev,

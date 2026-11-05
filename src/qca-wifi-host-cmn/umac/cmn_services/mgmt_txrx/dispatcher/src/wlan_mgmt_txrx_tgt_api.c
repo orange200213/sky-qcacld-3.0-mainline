@@ -1342,6 +1342,10 @@ QDF_STATUS tgt_mgmt_txrx_tx_completion_handler(
 	ota_comp_cb = mgmt_desc->tx_ota_cmpl_cb;
 	nbuf = mgmt_desc->nbuf;
 
+	pr_err("sky-dbg7: mgmt_txrx_compl desc=%u status=%u tx_cb=%d ota_cb=%d ctx=%d\n",
+	       desc_id, status, tx_compl_cb ? 1 : 0, ota_comp_cb ? 1 : 0,
+	       mgmt_desc->context ? 1 : 0);
+
 	/*
 	 *      TO DO
 	 * Make the API more generic to handle tx download completion as well

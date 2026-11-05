@@ -760,6 +760,12 @@ static void lim_send_sta_disconnect_ind(struct mac_context *mac,
 
 void lim_cm_send_disconnect_rsp(struct mac_context *mac_ctx, uint8_t vdev_id)
 {
+	{
+		static unsigned int sky_rsp_cnt;
+
+		pr_err("sky-dbgA: lim_cm_send_disconnect_rsp #%u vdev=%u\n",
+		       sky_rsp_cnt++, vdev_id);
+	}
 	QDF_STATUS status;
 	struct scheduler_msg rsp_msg = {0};
 	struct cm_vdev_disconnect_rsp *rsp;
